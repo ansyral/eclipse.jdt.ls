@@ -23,6 +23,7 @@ import org.eclipse.jdt.core.Flags;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.IMethod;
 import org.eclipse.jdt.core.ISourceRange;
 import org.eclipse.jdt.core.ISourceReference;
 import org.eclipse.jdt.core.IType;
@@ -35,6 +36,7 @@ import org.eclipse.jdt.core.search.SearchMatch;
 import org.eclipse.jdt.core.search.SearchParticipant;
 import org.eclipse.jdt.core.search.SearchPattern;
 import org.eclipse.jdt.core.search.SearchRequestor;
+import org.eclipse.jdt.launching.JavaRuntime;
 import org.eclipse.jdt.ls.core.internal.JDTUtils;
 import org.eclipse.jdt.ls.core.internal.JavaLanguageServerPlugin;
 import org.eclipse.jdt.ls.core.internal.ResourceUtils;
@@ -48,8 +50,12 @@ public class CodeLensHandler {
 
 	private static final String JAVA_SHOW_REFERENCES_COMMAND = "java.show.references";
 	private static final String JAVA_SHOW_IMPLEMENTATIONS_COMMAND = "java.show.implementations";
+	private static final String JAVA_RUN_TEST_COMMAND = "java.run.test";
+	private static final String JAVA_DEBUG_TEST_COMMAND = "java.debug.test";
 	private static final String IMPLEMENTATION_TYPE = "implementations";
 	private static final String REFERENCES_TYPE = "references";
+	private static final String RUNTEST_TYPE = "runtest";
+	private static final String DEBUGTEST_TYPE = "debugtest";
 
 	private final PreferenceManager preferenceManager;
 
@@ -78,6 +84,10 @@ public class CodeLensHandler {
 		} else if (IMPLEMENTATION_TYPE.equals(type)) {
 			label = "implementation";
 			command = JAVA_SHOW_IMPLEMENTATIONS_COMMAND;
+		} else if (RUNTEST_TYPE.equals(type)) {
+			command = JAVA_RUN_TEST_COMMAND;
+		} else if (DEBUGTEST_TYPE.equals(type)) {
+			command = JAVA_DEBUG_TEST_COMMAND;
 		}
 		try {
 			ICompilationUnit unit = JDTUtils.resolveCompilationUnit(uri);
@@ -97,6 +107,18 @@ public class CodeLensHandler {
 							JavaLanguageServerPlugin.logException(e.getMessage(), e);
 						}
 					}
+				} else if (RUNTEST_TYPE.equals(type) || DEBUGTEST_TYPE.equals(type)) {
+					List<String> suite = new ArrayList<>();
+					if (element instanceof IType) {
+						suite.add(((IType) element).getFullyQualifiedName());
+					} else {
+						String parent = ((IType) element.getParent()).getFullyQualifiedName();
+						suite.add(parent + "#" + element.getElementName());
+					}
+					String[] classpaths = JavaRuntime.computeDefaultRuntimeClassPath(unit.getJavaProject());
+					Command c = new Command(RUNTEST_TYPE.equals(type) ? "Run Test" : "Debug Test", command, Arrays.asList(uri, classpaths, suite));
+					lens.setCommand(c);
+					return lens;
 				}
 			}
 		} catch (CoreException e) {
@@ -169,6 +191,7 @@ public class CodeLensHandler {
 			IJavaElement[] elements = unit.getChildren();
 			ArrayList<CodeLens> lenses = new ArrayList<>(elements.length);
 			collectCodeLenses(unit, elements, lenses, monitor);
+			collectCodeLensesForJunit(unit, elements, lenses, monitor);
 			if (monitor.isCanceled()) {
 				lenses.clear();
 			}
@@ -203,6 +226,56 @@ public class CodeLensHandler {
 					lenses.add(lens);
 				}
 			}
+		}
+	}
+
+	private boolean collectCodeLensesForJunit(ICompilationUnit unit, IJavaElement[] elements, ArrayList<CodeLens> lenses, IProgressMonitor monitor) throws JavaModelException {
+		if (!preferenceManager.getPreferences().isRunTestsCodeLensEnabled() && !preferenceManager.getPreferences().isDebugTestsCodeLensEnabled()) {
+			return false;
+		}
+		boolean hasTests = false;
+		for (IJavaElement element : elements) {
+			if (monitor.isCanceled()) {
+				return false;
+			}
+			if (element.getElementType() == IJavaElement.TYPE && ((IType) element).isClass()) {
+				boolean res = collectCodeLensesForJunit(unit, ((IType) element).getChildren(), lenses, monitor);
+				if (res) {
+					if (preferenceManager.getPreferences().isRunTestsCodeLensEnabled()) {
+						lenses.add(getCodeLens(RUNTEST_TYPE, element, unit));
+						hasTests = true;
+					}
+					if (preferenceManager.getPreferences().isDebugTestsCodeLensEnabled()) {
+						lenses.add(getCodeLens(DEBUGTEST_TYPE, element, unit));
+						hasTests = true;
+					}
+				}
+			} else if (element.getElementType() == IJavaElement.METHOD && !JDTUtils.isHiddenGeneratedElement(element)) {
+				IMethod method = (IMethod) element;
+				if (isTestMethod(method, "org.junit.Test")) {
+					if (preferenceManager.getPreferences().isRunTestsCodeLensEnabled()) {
+						lenses.add(getCodeLens(RUNTEST_TYPE, element, unit));
+						hasTests = true;
+					}
+					if (preferenceManager.getPreferences().isDebugTestsCodeLensEnabled()) {
+						lenses.add(getCodeLens(DEBUGTEST_TYPE, element, unit));
+						hasTests = true;
+					}
+				}
+			}
+		}
+		return hasTests;
+	}
+
+	private static boolean isTestMethod(IMethod method, String annotation) {
+		int flags;
+		try {
+			flags = method.getFlags();
+			// 'V' is void signature
+			return !(method.isConstructor() || !Flags.isPublic(flags) || Flags.isAbstract(flags) || Flags.isStatic(flags) || !"V".equals(method.getReturnType())) && method.getAnnotation(annotation) != null;
+		} catch (JavaModelException e) {
+			// ignore
+			return false;
 		}
 	}
 

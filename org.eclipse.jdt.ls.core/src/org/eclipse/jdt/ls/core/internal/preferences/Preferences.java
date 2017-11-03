@@ -41,6 +41,16 @@ public class Preferences {
 	public static final String IMPLEMENTATIONS_CODE_LENS_ENABLED_KEY = "java.implementationsCodeLens.enabled";
 
 	/**
+	 * Preference key to enable/disable run test code lenses.
+	 */
+	public static final String RUN_TESTS_CODE_LENS_ENABLED_KEY = "java.runTestsCodeLens.enabled";
+
+	/**
+	 * Preference key to enable/disable run test code lenses.
+	 */
+	public static final String DEBUG_TESTS_CODE_LENS_ENABLED_KEY = "java.debugTestsCodeLens.enabled";
+
+	/**
 	 * Preference key to enable/disable formatter.
 	 */
 	public static final String JAVA_FORMAT_ENABLED_KEY = "java.format.enabled";
@@ -128,6 +138,8 @@ public class Preferences {
 	private FeatureStatus updateBuildConfigurationStatus;
 	private boolean referencesCodeLensEnabled;
 	private boolean implementationsCodeLensEnabled;
+	private boolean runTestsCodeLensEnabled;
+	private boolean debugTestsCodeLensEnabled;
 	private boolean javaFormatEnabled;
 	private boolean signatureHelpEnabled;
 	private boolean renameEnabled;
@@ -193,6 +205,8 @@ public class Preferences {
 		updateBuildConfigurationStatus = FeatureStatus.interactive;
 		referencesCodeLensEnabled = true;
 		implementationsCodeLensEnabled = false;
+		runTestsCodeLensEnabled = true;
+		debugTestsCodeLensEnabled = true;
 		javaFormatEnabled = true;
 		signatureHelpEnabled = false;
 		renameEnabled = true;
@@ -223,6 +237,10 @@ public class Preferences {
 		prefs.setReferencesCodelensEnabled(referenceCodelensEnabled);
 		boolean implementationCodeLensEnabled = getBoolean(configuration, IMPLEMENTATIONS_CODE_LENS_ENABLED_KEY, false);
 		prefs.setImplementationCodelensEnabled(implementationCodeLensEnabled);
+		boolean runTestsCodelensEnabled = getBoolean(configuration, RUN_TESTS_CODE_LENS_ENABLED_KEY, true);
+		prefs.setRunTestsCodelensEnabled(runTestsCodelensEnabled);
+		boolean debugTestsCodelensEnabled = getBoolean(configuration, DEBUG_TESTS_CODE_LENS_ENABLED_KEY, true);
+		prefs.setDebugTestsCodelensEnabled(debugTestsCodelensEnabled);
 
 		boolean javaFormatEnabled = getBoolean(configuration, JAVA_FORMAT_ENABLED_KEY, true);
 		prefs.setJavaFormatEnabled(javaFormatEnabled);
@@ -268,6 +286,16 @@ public class Preferences {
 
 	private Preferences setReferencesCodelensEnabled(boolean enabled) {
 		this.referencesCodeLensEnabled = enabled;
+		return this;
+	}
+
+	private Preferences setRunTestsCodelensEnabled(boolean enabled) {
+		this.runTestsCodeLensEnabled = enabled;
+		return this;
+	}
+
+	private Preferences setDebugTestsCodelensEnabled(boolean enabled) {
+		this.debugTestsCodeLensEnabled = enabled;
 		return this;
 	}
 
@@ -334,8 +362,16 @@ public class Preferences {
 		return implementationsCodeLensEnabled;
 	}
 
+	public boolean isRunTestsCodeLensEnabled() {
+		return runTestsCodeLensEnabled;
+	}
+
+	public boolean isDebugTestsCodeLensEnabled() {
+		return debugTestsCodeLensEnabled;
+	}
+
 	public boolean isCodeLensEnabled() {
-		return referencesCodeLensEnabled || implementationsCodeLensEnabled;
+		return referencesCodeLensEnabled || implementationsCodeLensEnabled || runTestsCodeLensEnabled || debugTestsCodeLensEnabled;
 	}
 
 	public boolean isJavaFormatEnabled() {
